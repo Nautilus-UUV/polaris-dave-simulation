@@ -2,63 +2,108 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PointStamped
 import subprocess
+import time  # For throttling logs
 
 glider = "glider_nautilus"
 
-class DepthMonitor(Node):
+class BladderMonitor(Node):
     def __init__(self):
-        super().__init__('depth_monitor')
+        super().__init__('bladder_monitor')
 
-        # Target depth and Gazebo topic
-        self.target_depth = 3.0
-        self.thrust_topic = "/model/"+glider+"/joint/bladder_joint/cmd_thrust"
-        self.initial_thrust = -150.0
+        # Target bladder and Gazebo topic
+        self.target_depth = 2.0
+        self.bladder_topic = f"/model/{glider}/joint/bladder_joint/cmd_thrust"
+        self.initial_bladder = -150.0
 
-        # Shutdown flag to ensure rclpy.shutdown() is called only once
+        # Threshold for surface re-entry
+        self.has_reached_target_depth = False
         self.shutdown_triggered = False
 
-        # Create ROS 2 subscription to depth topic
+        # Frequency control
+        self.callback_frequency = 0.01  # secs
+        self.last_callback_time = 0.0
+
+        # Logging throttle
+        self.log_frequency = 0.1  # secs
+        self.last_log_time = time.time()
+
+        # Store depth information
+        self.latest_depth_msg = None
+        self.last_logged_depth = None
+        self.eq_counter = 0
+
+        # Subscription to depth topic
         self.subscription = self.create_subscription(
             PointStamped,
-            "/model/"+glider+"/sea_pressure_depth",
+            f"/model/{glider}/sea_pressure_depth",
             self.depth_callback,
             10
         )
 
-        # Initialize thrust
-        self.set_thrust(self.initial_thrust)
-        self.get_logger().info(f"Initial thrust set to {self.initial_thrust}.")
+        # Timer to control processing frequency
+        self.timer = self.create_timer(self.callback_frequency, self.process_depth)
 
-    def set_thrust(self, thrust_value):
-        """Send thrust command to Gazebo topic."""
-        thrust_command = f"gz topic -t {self.thrust_topic} -m gz.msgs.Double -p 'data: {thrust_value}'"
-        subprocess.run(thrust_command, shell=True)
-        self.get_logger().info(f"Thrust set to {thrust_value}.")
+        # Initialize bladder
+        self.set_bladder(self.initial_bladder)
+        self.get_logger().info(f"Initial bladder set to {self.initial_bladder}.")
+
+    def set_bladder(self, bladder_value):
+        """Send bladder command to Gazebo topic."""
+        bladder_command = f"gz topic -t {self.bladder_topic} -m gz.msgs.Double -p 'data: {bladder_value}'"
+        subprocess.run(bladder_command, shell=True)
+        self.get_logger().info(f"Bladder set to {bladder_value}.")
 
     def depth_callback(self, msg):
-        """Callback function to process depth readings."""
-        current_depth = msg.point.z
-        self.get_logger().info(f"Current depth: {current_depth:.2f} meters")
+        """Store the latest depth message."""
+        self.latest_depth_msg = msg.point.z
 
-        # Stop thrust when the target depth is reached
-        if current_depth >= self.target_depth:
-            self.get_logger().info(f"Target depth of {self.target_depth} meters reached. Stopping thrust...")
-            self.set_thrust(0.0)
+    def process_depth(self):
+        """Process the latest depth message at a controlled frequency."""
+        if not self.latest_depth_msg:
+            return
 
-            # Shutdown the node gracefully
-            if not self.shutdown_triggered:
-                self.shutdown_triggered = True
-                rclpy.shutdown()
+        current_depth = self.latest_depth_msg
+
+        # Log only at throttled intervals
+        current_time = time.time()
+        if current_time - self.last_log_time >= self.log_frequency:
+            self.get_logger().info(f"Current depth: {current_depth:.2f} meters")
+            self.last_log_time = current_time
+            self.last_logged_depth = current_depth
+
+        # Check bladder and node shutdown conditions
+        self.check_bladder(current_depth)
+        self.check_equilibrium(current_depth)
+
+    def check_bladder(self, current_depth):
+        """Check if the target depth is reached and stop the bladder."""
+        if current_depth >= self.target_depth - 1e-3 and not self.has_reached_target_depth:
+            self.get_logger().info(f"Target depth of {self.target_depth} meters reached. Stopping bladder...")
+            self.set_bladder(0.0)
+            self.has_reached_target_depth = True
+
+    def check_equilibrium(self, current_depth):
+        """Check if equilibrium is reached and shut down the node."""
+        # Compare current depth with the last logged depth
+        if self.last_logged_depth is not None and abs(current_depth - self.last_logged_depth) < 1e-3:
+            self.eq_counter += 1
+        else:
+            self.eq_counter = 0
+
+        if self.eq_counter >= int(1/self.log_frequency):  # Threshold for equilibrium
+            self.get_logger().info("Glider has reached equilibrium. Shutting down gracefully...")
+            self.shutdown_triggered = True
+            rclpy.shutdown()
 
 def main(args=None):
     rclpy.init(args=args)
 
-    depth_monitor = DepthMonitor()
+    depth_monitor = BladderMonitor()
 
     try:
         rclpy.spin(depth_monitor)
     except KeyboardInterrupt:
-        depth_monitor.get_logger().info("Depth monitoring interrupted by user.")
+        depth_monitor.get_logger().info("Bladder monitoring interrupted by user.")
     finally:
         # Check if shutdown was already triggered
         if not depth_monitor.shutdown_triggered:
@@ -67,4 +112,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
