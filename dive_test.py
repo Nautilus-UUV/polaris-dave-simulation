@@ -14,6 +14,9 @@ class DepthMonitor(Node):
         self.thrust_topic = "/model/"+glider+"/joint/bladder_joint/cmd_thrust"
         self.initial_thrust = -150.0
 
+        # Shutdown flag to ensure rclpy.shutdown() is called only once
+        self.shutdown_triggered = False
+
         # Create ROS 2 subscription to depth topic
         self.subscription = self.create_subscription(
             PointStamped,
@@ -41,8 +44,11 @@ class DepthMonitor(Node):
         if current_depth >= self.target_depth:
             self.get_logger().info(f"Target depth of {self.target_depth} meters reached. Stopping thrust...")
             self.set_thrust(0.0)
+
             # Shutdown the node gracefully
-            rclpy.shutdown()
+            if not self.shutdown_triggered:
+                self.shutdown_triggered = True
+                rclpy.shutdown()
 
 def main(args=None):
     rclpy.init(args=args)
@@ -54,8 +60,11 @@ def main(args=None):
     except KeyboardInterrupt:
         depth_monitor.get_logger().info("Depth monitoring interrupted by user.")
     finally:
-        depth_monitor.destroy_node()
-        rclpy.shutdown()
+        # Check if shutdown was already triggered
+        if not depth_monitor.shutdown_triggered:
+            depth_monitor.destroy_node()
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
+
