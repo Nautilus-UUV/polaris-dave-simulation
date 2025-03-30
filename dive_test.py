@@ -1,10 +1,17 @@
 import rclpy
 from rclpy.node import Node
+from sensor_msgs.msg import FluidPressure
 from geometry_msgs.msg import PointStamped
 import subprocess
 import time  # For throttling logs
 
 glider = "glider_nautilus"
+
+# CONSTANTS
+
+# p=p0+k*z
+__std_pressure__ = 101.325  # kPa
+__k__ = 9.80638 # kPa/m
 
 class BladderMonitor(Node):
     def __init__(self):
@@ -34,9 +41,9 @@ class BladderMonitor(Node):
 
         # Subscription to depth topic
         self.subscription = self.create_subscription(
-            PointStamped,
-            f"/model/{glider}/sea_pressure_depth",
-            self.depth_callback,
+            FluidPressure,
+            f"/model/{glider}/sea_pressure",
+            self.pressure_callback,
             10
         )
 
@@ -53,9 +60,13 @@ class BladderMonitor(Node):
         subprocess.run(bladder_command, shell=True)
         self.get_logger().info(f"Bladder set to {bladder_value}.")
 
-    def depth_callback(self, msg):
+    def pressure_callback(self, msg):
         """Store the latest depth message."""
-        self.latest_depth_msg = msg.point.z
+        # Access the fluid pressure from the message
+        pressure = msg.fluid_pressure  # This is the pressure value in Pascals
+        # Convert pressure from Pascals to kPa
+        # Calculate depth from pressure
+        self.latest_depth_msg = (pressure - __std_pressure__) / __k__
 
     def process_depth(self):
         """Process the latest depth message at a controlled frequency."""
@@ -90,7 +101,7 @@ class BladderMonitor(Node):
         else:
             self.eq_counter = 0
 
-        if self.eq_counter >= int(1/self.log_frequency):  # Threshold for equilibrium
+        if self.eq_counter >= 2*int(1/self.log_frequency):  # Threshold for equilibrium
             self.get_logger().info("Glider has reached equilibrium. Shutting down gracefully...")
             self.shutdown_triggered = True
             rclpy.shutdown()
