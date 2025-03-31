@@ -1,0 +1,8 @@
+{
+    "glider_name" : "glider_nautilus",
+    "std_pressure" : 101.325,
+    "k" : 9.80638,
+    "bladder_period" : 5, // Time to inflate or deflate bladder
+    "bladder_thrust_differential" : 5,  // Maximum thrust differential
+    "neutral_thrust" : -35.75  // Neutral thrust
+}

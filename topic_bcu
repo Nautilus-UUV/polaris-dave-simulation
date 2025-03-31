@@ -1,0 +1,103 @@
+from rclpy.node import Node
+from rclpy import shutdown, init, spin 
+from std_msgs.msg import Float64
+import subprocess
+from json import load
+
+with open('config.json', 'r') as f:
+    config = load(f)
+
+glider = config['glider_name']
+
+class TopicBCU(Node):
+    def __init__(self):
+        super().__init__('bladder_monitor')
+
+        # Inputs
+        self.target_depth = 0.6
+        self.is_stroke_downward = True
+
+        # Bladder Parameters
+        self.bladder_topic = f"/model/{glider}/joint/bladder_joint/cmd_thrust"
+        self.neutral = config['neutral_thrust']  # Known neutral thrust
+        self.down = -1*config['bladder_thrust_differential']  # Minimum thrust differential (downwards)
+        self.up = config['bladder_thrust_differential']  # Maximum thrust differential (upwards)
+
+        # Initialize bladder thrust
+        self.thrust = self.neutral
+
+        # Global time tracking
+        self.current_time = 0.0
+        self.last_update_time = 0.0  # Store last update time for gradual adjustment
+        self.start_thrust = None
+        self.target_thrust = None
+        self.bladder_period = config['bladder_period']  # Bladder period
+
+        # PID Parameters
+        self.Kp = 10.0   # Proportional gain
+        self.Ki = 1.0    # Integral gain
+        self.Kd = 5.0    # Derivative gain
+
+        self.prev_error = 0.0
+        self.integral = 0.0
+
+        # Code Parameters
+        self.reached_target_depth = False
+        self.shutdown_triggered = False
+        self.callback_frequency = 1e-5  # Frequency in seconds
+
+        self.timer = self.create_timer(self.callback_frequency, self.motion_control)
+
+        # Subscriptions
+        self.create_subscription(Float64, '/global_time', self.time_callback, 10)
+
+    ###########################################################
+    ### Gradual bladder
+    ###########################################################
+
+    def time_callback(self, msg): self.current_time = msg.data
+
+    def update_thrust(self):
+        """Gradually adjust the thrust based on elapsed time since the last update."""
+        if self.start_thrust is None or self.target_thrust is None:
+            self.get_logger().warn("⚠️ No transition in progress.")
+            return  # No transition in progress
+
+        elapsed_time = self.current_time - self.last_update_time
+
+        # Debug: Print the state of the thrust transition
+        self.get_logger().info(f"🕒 Elapsed Time: {elapsed_time:.4f}s / {self.bladder_period}s")
+        self.get_logger().info(f"🔄 Transitioning from {self.start_thrust:.2f} -> {self.target_thrust:.2f}")
+
+        if elapsed_time >= self.bladder_period:
+            self.set_bladder(self.target_thrust)
+            self.start_thrust = None  # Stop adjusting
+            self.target_thrust = None
+            self.get_logger().info(f"✅ Thrust transition completed. New thrust: {self.thrust:.2f}")
+        else:
+            # Linear interpolation between start and target thrust
+            new_thrust = self.start_thrust + (self.target_thrust - self.start_thrust) * (elapsed_time / self.bladder_period)
+            self.set_bladder(new_thrust)
+            self.get_logger().info(f"➡️ Gradual adjustment: {new_thrust:.2f}")
+
+    def set_bladder(self, bladder_value):
+        """Send bladder command to Gazebo topic."""
+        bladder_value = max(self.neutral + self.down, min(bladder_value, self.neutral + self.up))  # Clamp thrust within limits
+        bladder_command = f"gz topic -t {self.bladder_topic} -m gz.msgs.Double -p 'data: {bladder_value}'"
+        subprocess.run(bladder_command, shell=True)
+        self.get_logger().info(f"Bladder set to {bladder_value:.2f}.")
+        self.thrust = bladder_value
+
+def main():
+    init()
+    node = TopicBCU()
+    try:
+        spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("BCU topic shutting down.")
+    finally:
+        node.destroy_node()
+        shutdown()
+
+if __name__ == '__main__':
+    main()
