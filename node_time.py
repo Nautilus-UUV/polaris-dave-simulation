@@ -5,7 +5,7 @@ from time import time
 
 class TopicTime(Node):
     def __init__(self):
-        super().__init__('topic_time')
+        super().__init__('node_time')
         self.publisher = self.create_publisher(Float64, '/global_time', 10)
         self.start_time = time()
         self.timer = self.create_timer(0.1, self.publish_time)  # Publish every 0.1 seconds
@@ -22,7 +22,7 @@ def main():
     try:
         spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Time topic shutting down.")
+        node.get_logger().info("Time node shutting down.")
     finally:
         node.destroy_node()
         shutdown()

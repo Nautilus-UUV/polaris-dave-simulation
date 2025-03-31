@@ -19,7 +19,7 @@ __neutral_thrust__ = -35.75  # Neutral thrust
 
 class BadderControlUnit(Node):
     def __init__(self):
-        super().__init__('bladder_monitor')
+        super().__init__('maintain_dive')
 
         # Inputs
         self.target_depth = 0.6
@@ -64,7 +64,7 @@ class BadderControlUnit(Node):
         # Code Parameters
         self.reached_target_depth = False
         self.shutdown_triggered = False
-        self.callback_frequency = 1e-5  # Frequency in seconds
+        self.callback_frequency = 1e-1  # Frequency in seconds
 
         # Overshooting counterFalse
         self.overshoot_counter = 1
