@@ -1,7 +1,7 @@
 import typing
 
-import py_pkg.bladder_control.depth_control_node_SimMath as SimMath
-from py_pkg.bladder_control.depth_control_node_SimMath import Vector
+import py_pkg.bladder_control_node.depth_control_node_SimMath as SimMath
+from py_pkg.bladder_control_node.depth_control_node_SimMath import Vector
 
 
 
