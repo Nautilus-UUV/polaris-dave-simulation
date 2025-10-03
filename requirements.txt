@@ -1,0 +1,17 @@
+# Python dependencies for polaris-dave-simulation
+
+# =============================================================================
+# dive_test.py (current working script)
+# =============================================================================
+# No pip dependencies required!
+# Only uses Python standard library (subprocess, time) and ROS2 packages.
+#
+# ROS2 packages (installed via apt):
+#   - ros-jazzy-rclpy
+#   - ros-jazzy-sensor-msgs
+#   - ros-jazzy-geometry-msgs
+
+# =============================================================================
+# bladder_control/ (future BCU hardware integration)
+# =============================================================================
+numpy>=1.20.0
