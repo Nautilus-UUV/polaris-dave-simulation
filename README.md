@@ -8,12 +8,24 @@ This project aims to provide a realistic and configurable simulation environment
 
 **Installation:**
 
-To use this simulation, you need to have DAVE installed and configured on your system. Please follow the official DAVE installation tutorial:
-
-[https://dave-ros2.notion.site/Installation-Tutorial-fcc36eee94cb4c76a0b06f71d17bb360](https://dave-ros2.notion.site/Installation-Tutorial-fcc36eee94cb4c76a0b06f71d17bb360)
+To use this simulation, you need to have our custom DAVE fork: https://github.com/Nautilus-UUV/dave
 
 **Quick Start:**
 
-Once DAVE is installed, run the desired .py script.
+Source dave in one terminal:
+```bash
+alias jazzy='source /opt/ros/jazzy/setup.bash'
+alias harmonic='source /opt/gazebo/install/setup.bash && export PYTHONPATH=$PYTHONPATH:/opt/gazebo/install/lib/python'
+alias dave='jazzy && harmonic && source ~/dave_ws/install/setup.bash'
+dave
+```
+
+then start the gazebo simulation by running:
+
+```bash
+source run.sh
+```
+
+In another terminal, source dave and activate the python venv, then run the desired .py script.
 
 **Further Documentation Needed.**
